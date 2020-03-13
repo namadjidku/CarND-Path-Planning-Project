@@ -110,36 +110,23 @@ Please (do your best to) stick to [Google's C++ style guide](https://google.gith
 Note: regardless of the changes you make, your project must be buildable using
 cmake and make!
 
+## Reflection
+The code for path planing consists of three sections: prediction, behavior planning and trajectory generation.
 
-## Call for IDE Profiles Pull Requests
+##### Prediction
 
-Help your fellow students!
+Using sensor fusion data, we iterate through available agent cars and store in the vector 'predictions' d coordinate, predicted s coordinate and velocity for each agent. Velocity is computed as the sum of vectors vx and vy. For the highway, we assume that each agent will continue on the lane it is currently following with a constant velocity. Thus, for d coordinate there will be no changes, for s coordinate, we compute its predicted value using a linear motion model.    
 
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to ensure
-that students don't feel pressured to use one IDE or another.
+##### Behavior Planning
 
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
+For behaviour planning, FSM is used with three states: keep lane (KL), lane change left (LCL) and lane change right (LCR). Function successor_states returns successors for the current state. From LCL and LCR we can transit only to KL state. From KL state, we can go to states LCL and LCR depending on the current lane.
 
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
+For each successor, we compute possible trajectories (function generate_trajectories). By trajectories we mean a lane number and a lane velocity. To generate possible trajectories, we iterate through the vector predictions, and estimate the agents positions. If we have an agent moving in front of us within 30 meters with a speed lower than the current velocity, we consider changing the lane. We can also stay in the current lane slowing down. For changing the lane, we check wether we have agents on the left and on the right within 10 meters gap.   
 
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
+After the possible trajectories are computed, we estimate the cost of each trajectory. The trajectory with a minimum cost is considered as the final one. Cost is computed as exp((current_velocity-target_velocity) / (abs(current_lane-intended_line) + 1)). If current_velocity is less than target_velocity, the cost is small and the car will speed up, in case target_velocity is more than current_velocity, the cost is high and changing the lane will be more preferable than keeping the current one. 
 
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
+###### Trajectory Generation
 
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
+The code for trajectory generation was giving in the video, in the course material. 
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+It uses splines to interpolate the path points to get a smoth trajectory. The path points at each iteration is a set of 5 points. First two points are either last two from the previous trajectory or the current position of the vehicle and the estimated previous one. The other three points are generated in fernet coordinates, equally spaced by 30 meters starting after the reference point. After interpolation, we take the rest of points left from the previous trajectory and add the new generated ones up to 50 points all together. This approach guarantees a smoth transition between trajectories. 

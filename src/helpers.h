@@ -8,6 +8,32 @@
 // for convenience
 using std::string;
 using std::vector;
+using std::cout;
+using std::endl;
+
+// within what range we consider cars on the same lane where we are
+const float range = 1.8;
+
+// within what distance we consider cars close to us
+const int distance_ = 30;
+
+// Reference velocity to target
+const double ref_vel = 49.5;
+
+
+// struct to store predicted s coordinate, d and speed values of other agents 
+struct prediction {
+    double car_s;
+    float d;
+    double speed;
+};
+
+// struct to lane and lane_velocity for a possible trajectory
+struct trajectory {
+    int lane;
+    double lane_vel;
+};
+
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -154,4 +180,83 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s,
   return {x,y};
 }
 
+
+vector<string> successor_states(string current_state, int current_lane) {
+  // Provides the possible next states given the current state for the FSM 
+
+  vector<string> states;
+
+  if(current_state.compare("KL") == 0) {
+    if (current_lane > 0)
+      states.push_back("LCL");
+    if (current_lane < 2)
+      states.push_back("LCR");
+  } 
+
+  states.push_back("KL");
+  return states;
+}
+
+bool check_car_on_the_lane(int lane, float d) {
+  return ((d < (2 + 4*lane + range)) && (d > (2 + 4*lane - range)));
+}
+
+bool changing_lane(int lane, double car_d) {
+  return ((car_d > (2 + 4*lane + range / 2)) || (car_d < (2 + 4*lane - range / 2)));
+}
+
+vector<trajectory> generate_trajectories(string state, vector<prediction> predictions, int lane, double car_s, double car_d) {
+  // Given a possible next state, generate the appropriate trajectory 
+  
+  vector<trajectory> trajectories;
+  
+  double kl_vel = ref_vel, lcl_vel = ref_vel, lcr_vel = ref_vel;
+  bool car_on_the_right = false, car_on_the_left = false;
+  
+  for (vector<prediction>::iterator p = predictions.begin(); p != predictions.end(); ++p) {
+    
+    // we check wether the current agent is in front of us
+    if(check_car_on_the_lane(lane, p->d)) {
+      if(p->car_s > car_s && (p->car_s - car_s < distance_)) {
+        kl_vel = p->speed;
+      }
+    }
+      
+    // we check wether the current agent is on the left lane
+    if(check_car_on_the_lane(lane - 1, p->d)) {
+      lcl_vel = p->speed;
+      
+      if(abs(p->car_s -car_s) < distance_ / 1.5) 
+        car_on_the_left = true;     
+    }
+      
+    // we check wether the current agent is on the right lane
+    if(check_car_on_the_lane(lane + 1, p->d)) {
+      lcr_vel = p->speed;
+      
+      if(abs(p->car_s - car_s) < distance_ / 1.5) 
+        car_on_the_right = true;     
+    }
+  }
+  
+  if (state.compare("KL") == 0) {
+    trajectories.push_back({lane, kl_vel});
+  } 
+  else if (state.compare("LCL") == 0) {
+    if(!car_on_the_left && !changing_lane(lane, car_d)) 
+      trajectories.push_back({lane - 1, lcl_vel});
+  } 
+  else if (state.compare("LCR") == 0) {
+    if(!car_on_the_right  && !changing_lane(lane, car_d)) 
+      trajectories.push_back({lane + 1, lcr_vel});
+  }
+
+  return trajectories;
+}
+
+       
+float calculate_cost(trajectory tt, double cur_vel, int lane) {
+  
+  return exp((cur_vel - tt.lane_vel) /  (abs(lane - tt.lane) + 1));
+}
 #endif  // HELPERS_H

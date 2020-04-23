@@ -77,3 +77,5 @@ It uses splines to interpolate the path points to get a smoth trajectory. The pa
 
 
 ##### Performance 
+[image]: performance.jpeg  "Performance"
+![alt text][image]
